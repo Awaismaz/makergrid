@@ -27,6 +27,20 @@ TRELLIS_KEY = os.getenv("TRELLIS_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+
+def save_uploaded_file_to_media(uploaded_file, filename):
+    path = default_storage.save(f"uploads/{filename}", ContentFile(uploaded_file.read()))
+    return settings.MEDIA_URL + path
+
+def download_and_save_to_media(url, filename):
+    response = requests.get(url)
+    if response.status_code == 200:
+        path = default_storage.save(f"models/{filename}", ContentFile(response.content))
+        return settings.MEDIA_URL + path
+    raise Exception("Failed to download file from external source.")
+
 def normalize_text(text):
     return text.lower().replace("-", " ").replace("_", " ").strip()
 
@@ -35,6 +49,7 @@ class TextTo3DModelView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     def post(self, request):
+        print("Job started")
         start = time.time()
         user_prompt = request.data.get("prompt")
         style = request.data.get("style")
@@ -103,7 +118,9 @@ class TextTo3DModelView(APIView):
             glb_filename = f"{uuid.uuid4()}.glb"
             bucket_name = "makergrid-media"
 
-            s3_url = upload_model_to_s3(model_file,glb_filename,bucket_name)
+            s3_url = download_and_save_to_media(model_file, glb_filename)
+            print(f'Path to Model: {s3_url}')
+
 
             asset = Asset.objects.create(
                 user=request.user,
@@ -149,11 +166,8 @@ class ImageTo3DModelView(APIView):
                 return Response({"error": "No image uploaded"}, status=400)
 
             filename = f"temp_{uuid.uuid4()}.png"
-            bucket_name = "makergrid-media"
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
-            region_name=settings.AWS_S3_REGION_NAME
-            image_url = upload_image_to_s3(uploaded_file,filename,bucket_name,aws_access_key_id,aws_secret_access_key,region_name)
+
+            image_url = save_uploaded_file_to_media(uploaded_file, filename)
 
             # task = generate_model_task.delay(image_url, request.user.id)
             # return Response({"task_id": task.id}, status=202)
@@ -178,8 +192,7 @@ class ImageTo3DModelView(APIView):
 
             # Upload model to S3
             glb_filename = f"{uuid.uuid4()}.glb"
-            bucket_name = "makergrid-media"
-            s3_url = upload_model_to_s3(model_file, glb_filename, bucket_name)
+            s3_url = download_and_save_to_media(model_file, glb_filename)
 
             # Create Asset
             asset = Asset.objects.create(
@@ -203,91 +216,6 @@ class ImageTo3DModelView(APIView):
         except Exception as e:
             print("🔥 Exception in TextTo3DModelView:")
             print(traceback.format_exc())
-            return Response({"error": str(e)}, status=500)
-
-# class ModelJobStatusView(APIView):
-#     authentication_classes = [JWTAuthentication]
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def get(self, request, task_id):
-#         result = AsyncResult(task_id)
-#         print(f'model status asked')
-#         if result.ready():
-#             print('model is not ready')
-#             return Response({"status": result.status, "result": result.result})
-#         print('model is ready')
-#         return Response({"status": result.status})
-
-class ImageTo3DModelView1(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
-    print("Image to Model Requested")
-
-    def post(self, request):
-        start = time.time()
-        try:
-            uploaded_file = request.FILES.get("image")
-            if not uploaded_file:
-                return Response({"error": "No image uploaded"}, status=400)
-            
-            filename = f"temp_{uuid.uuid4()}.png"
-            bucket_name = "makergrid-media"
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
-            region_name=settings.AWS_S3_REGION_NAME
-            image_url = upload_image_to_s3(uploaded_file,filename,bucket_name,aws_access_key_id,aws_secret_access_key,region_name)
-            print(f"image_url for public :{image_url}")
-
-            replicate_input = {
-                "images": [image_url],
-                "texture_size": 2048,
-                "mesh_simplify": 0.9,
-                "generate_model": True,
-                "save_gaussian_ply": True,
-                "ss_sampling_steps": 38,
-            }
-            timeout = httpx.Timeout(300)
-            output = replicate.run(TRELLIS_KEY, input=replicate_input,timeout=timeout)
-            if not output:
-                return Response({"error": "Replicate output was None. Check API key, image URL, or payload format."}, status=500)
-            model_file = output.get("model_file") and output["model_file"].url
-            color_video = output.get("color_video") and output["color_video"].url
-            gaussian_ply = output.get("gaussian_ply") and output["gaussian_ply"].url
-
-            if not model_file:
-                return Response({"error": "model_file not found in output"}, status=500)
-
-            glb_filename = f"{uuid.uuid4()}.glb"
-            bucket_name = "makergrid-media"
-
-            s3_url = upload_model_to_s3(model_file,glb_filename,bucket_name)
-            print(f"S3 Model URL Uploaded : {s3_url}")
-            asset = Asset.objects.create(
-                user=request.user,
-                model_file=s3_url,
-                preview_image_url=image_url,
-            )
-
-            response = Response({
-                "message": "✅ 3D model created.",
-                "asset_id": asset.id,
-                "model_file": model_file,
-                "gaussian_ply": gaussian_ply,
-                "color_video": color_video,
-                "stored_path": s3_url,
-                "preview_image_url": image_url,
-                "created_at": asset.created_at,
-            })
-
-            if (new_token := request.META.get('HTTP_NEW_ACCESS')):
-                response['New-Access-Token'] = new_token
-            print(f"Request processed in {time.time() - start:.2f} seconds")
-            return response
-
-
-        except Exception as e:
-            print("🔥 Exception in TextTo3DModelView:")
-            print(traceback.format_exc()) 
             return Response({"error": str(e)}, status=500)
 
 class AssetListCreateView(generics.ListCreateAPIView):

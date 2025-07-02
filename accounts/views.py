@@ -2,6 +2,9 @@ import random
 import string
 import time
 import json
+import threading
+
+otp_lock = threading.Lock()
 
 from django.core.mail import send_mail
 from django.conf import settings
@@ -57,17 +60,21 @@ class SignupView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            if email in temp_user_store:
-                return Response({"detail": "OTP already sent. Please verify."}, status=400)
+            # if email in temp_user_store:
+            #     return Response({"detail": "OTP already sent. Please verify."}, status=400)
 
-            otp = generate_otp()
-            now = time.time()
-            temp_user_store[email] = {
-                "data": serializer.validated_data,
-                "otp": otp,
-                "expires_at": now + 3600,
-                "last_sent_at": now
-            }
+            with otp_lock:
+                if email in temp_user_store:
+                    return Response({"detail": "OTP already sent. Please verify."}, status=400)
+
+                otp = generate_otp()
+                now = time.time()
+                temp_user_store[email] = {
+                    "data": serializer.validated_data,
+                    "otp": otp,
+                    "expires_at": now + 3600,
+                    "last_sent_at": now
+                }
 
             send_mail(
                 subject="Your OTP Code",
@@ -89,30 +96,29 @@ class VerifyOTPView(APIView):
         email = request.data.get("email")
         otp_input = request.data.get("otp")
 
-        entry = temp_user_store.get(email)
-        if not entry:
-            return Response({"detail": "No signup attempt found."}, status=400)
-        if time.time() > entry["expires_at"]:
+        with otp_lock:
+            entry = temp_user_store.get(email)
+            if not entry:
+                return Response({"detail": "No signup attempt found."}, status=400)
+            if time.time() > entry["expires_at"]:
+                del temp_user_store[email]
+                return Response({"detail": "OTP expired."}, status=400)
+            if entry["otp"] != otp_input:
+                return Response({"detail": "Wrong OTP."}, status=400)
+
+            user_data = entry["data"]
+            user = CustomUser.objects.create_user(
+                username=user_data.get("username"),
+                email=user_data.get("email"),
+                password=user_data.get("password"),
+                full_name=user_data.get("full_name", ""),
+                organization=user_data.get("organization", ""),
+                tokens=200
+            )
+            user.is_email_verified = True
+            user.save()
             del temp_user_store[email]
-            return Response({"detail": "OTP expired."}, status=400)
-        if entry["otp"] != otp_input:
-            return Response({"detail": "Wrong OTP."}, status=400)
-
-        user_data = entry["data"]
-        user = CustomUser.objects.create_user(
-            username=user_data.get("username"),
-            email=user_data.get("email"),
-            password=user_data.get("password"),
-            full_name=user_data.get("full_name", ""),
-            organization=user_data.get("organization", ""),
-            # subscription_type="free",
-            tokens=200
-        )
-        user.is_email_verified = True
-        user.save()
-
-        del temp_user_store[email]
-        return Response({"success":True,"detail": "Account created successfully."}, status=201)
+            return Response({"success":True,"detail": "Account created successfully."}, status=201)
 
 
 class ResendOTPView(APIView):

@@ -4,6 +4,17 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.conf import settings  # ✅ Import this
 
+import uuid
+
+class PendingSignup(models.Model):
+    email = models.EmailField(unique=True)
+    username = models.CharField(max_length=150)
+    full_name = models.CharField(max_length=150, blank=True)
+    organization = models.CharField(max_length=150, blank=True)
+    password = models.CharField(max_length=128)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
 
 SUBSCRIPTION_CHOICES = [
     ('free', 'Free'),

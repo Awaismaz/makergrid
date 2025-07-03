@@ -1,26 +1,22 @@
+# celery.py (root of the project)
+
+from __future__ import absolute_import, unicode_literals
 import os
 from celery import Celery
-from celery.schedules import crontab  # ✅ REQUIRED for crontab()
 
-# Set default Django settings module
+# set default Django settings module for 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
-# Create Celery app instance
 app = Celery('core')
 
-# Load config from Django settings using namespace CELERY_
+# Using a string here means the worker doesn't have to serialize
+# the configuration object to child processes.
+# - namespace='CELERY' means all celery-related config keys should have a `CELERY_` prefix.
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Auto-discover tasks in all installed apps
+# Load task modules from all registered Django app configs.
 app.autodiscover_tasks()
 
-# ✅ Use Django DB-based scheduler (django-celery-beat)
-app.conf.beat_scheduler = 'django_celery_beat.schedulers:DatabaseScheduler'
-
-# ✅ Crontab-based auto-scheduled task
-app.conf.beat_schedule = {
-    'daily_token_refill': {
-        'task': 'accounts.tasks.refill_tokens',
-        'schedule': crontab(hour=0, minute=0),  # daily at midnight
-    },
-}
+@app.task(bind=True)
+def debug_task(self):
+    print('Request: {0!r}'.format(self.request))

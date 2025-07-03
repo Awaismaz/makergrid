@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "community",
     "makers",
     "corsheaders",
+    'django_celery_results',
     'django_celery_beat',
 
 ]
@@ -110,14 +111,41 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 ASGI_APPLICATION = "core.asgi.application"  # replace with your project name
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'INFO',  # Or WARNING, depending on your needs
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',  # Or WARNING, depending on your needs
+            'propagate': True,
+        },
+    },
+}
+
+
+
+
+# settings.py
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'makergrid_db',  # The name of your database
+        'USER': 'postgres',  # PostgreSQL username
+        'PASSWORD': '123',  # The new password you set for 'postgres'
+        'HOST': 'localhost',  # Use 'localhost' if the database is local
+        'PORT': '5432',  # Default PostgreSQL port
     }
 }
+
+
 
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -224,18 +252,35 @@ STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-CELERY_BROKER_URL = "redis://clustercfg.makergrid-redis.9fhmuh.eun1.cache.amazonaws.com:6379/0"
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
+# CELERY_BROKER_URL = "redis://clustercfg.makergrid-redis.9fhmuh.eun1.cache.amazonaws.com:6379/0"
+# CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+
+# settings.py
+
+# Celery configuration
+# CELERY_BROKER_URL = 'sqla+postgresql://postgres:123@localhost/makergrid_db'
+# CELERY_RESULT_BACKEND = 'django-db'  # Using Django database as the result backend
+
+# # Optional Celery task configurations
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+# CELERY_TIMEZONE = 'UTC'
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Redis broker URL
+CELERY_RESULT_BACKEND = 'django-db'  # Django database as result backend
 
 
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')  # Your AWS access key ID
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')  # Your AWS secret access key
-AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')  # Your S3 bucket name
-AWS_S3_REGION_NAME = 'eu-north-1'  # Your S3 region (e.g., us-east-1)
-AWS_S3_SIGNATURE_VERSION = 's3v4'
-AWS_DEFAULT_ACL = None  # To ensure files are uploaded as private
 
 
-AWS_LAMBDA_S3_KEY=os.getenv('aws_lambda_s3_api_key')
+# AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')  # Your AWS access key ID
+# AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')  # Your AWS secret access key
+# AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')  # Your S3 bucket name
+# AWS_S3_REGION_NAME = 'eu-north-1'  # Your S3 region (e.g., us-east-1)
+# AWS_S3_SIGNATURE_VERSION = 's3v4'
+# AWS_DEFAULT_ACL = None  # To ensure files are uploaded as private
+
+
+# AWS_LAMBDA_S3_KEY=os.getenv('aws_lambda_s3_api_key')

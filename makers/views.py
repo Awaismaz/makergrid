@@ -12,12 +12,14 @@ from .models import Asset
 from .serializers import AssetSerializer
 from core.authentication.authentication import JWTAuthentication
 from .pagination import CustomPageNumberPagination
-from makers.tasks.tasks import generate_model_task
 import replicate
 from openai import OpenAI
 import traceback
 import httpx
 import time
+from celery.result import AsyncResult
+from .tasks import generate_3d_model,generate_model_from_image
+# from .tasks import generate_3d_model
 load_dotenv(override=True)
 
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
@@ -45,118 +47,44 @@ def normalize_text(text):
     return text.lower().replace("-", " ").replace("_", " ").strip()
 
 
+
 class TextTo3DModelView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         print("Job started")
         start = time.time()
+        
+        # Extract the necessary information from the request
         user_prompt = request.data.get("prompt")
         style = request.data.get("style")
         complexity = request.data.get("complexity")
         optimize_printing = request.data.get("optimize_printing")
 
+        # Validate that the required fields are provided
         if not user_prompt or not style or not complexity:
             return Response({"error": "Prompt, style, and complexity are required."}, status=400)
-
-        complexity_map = {
-            "simple": "dall-e-2",
-            "medium": "dall-e-2",
-            "complex": "dall-e-3",
-            "very complex": "dall-e-3",
-        }
-
-        style_descriptions = {
-            "realistic": "photorealistic precision with accurate textures and lighting",
-            "stylized": "heavily stylized with exaggerated forms and bold colors",
-            "low-poly": "minimalist low-poly style for games",
-            "sci-fi": "futuristic, metallic, neon-lit design",
-            "fantasy": "mythical elements and magical scenery",
-            "miniature": "detailed miniatures for tabletop gaming",
-            "cartoon": "cartoonish, bold outlines, expressive features"
-        }
-
-        model_type = complexity_map.get(normalize_text(complexity), "dall-e-2")
-        style_instruction = style_descriptions.get(normalize_text(style), style_descriptions["realistic"])
-
-        final_prompt = (
-            f"Generate an image from: {user_prompt}. Style should be {style_instruction}. "
-            "Use a pure black background with the subject centered."
+        
+        # Get the user ID from the authenticated request user
+        user_id = request.user.id
+        
+        # Call the Celery task with the relevant arguments
+        task = generate_3d_model.apply_async(
+            args=[user_id, user_prompt, style, complexity, optimize_printing]
         )
 
-        if optimize_printing:
-            final_prompt += " Ensure 3D printability with correct thickness and no fragile parts."
+        print(f"Task {task.id} started for user {user_id}")
 
-        image_size = "1792x1024" if normalize_text(complexity) == "very complex" else "1024x1024"
-
-        try:
-            image_response = client.images.generate(
-                model=model_type,
-                prompt=final_prompt,
-                size=image_size,
-                n=1,
-            )
-            image_url = image_response.data[0].url
-
-            replicate_input = {
-                "images": [image_url],
-                "texture_size": 2048,
-                "mesh_simplify": 0.9,
-                "generate_model": True,
-                "save_gaussian_ply": True,
-                "ss_sampling_steps": 38,
-            }
-            timeout=httpx.Timeout(300)
-            output = replicate.run(TRELLIS_KEY, input=replicate_input,timeout=timeout)
-            model_file = output.get("model_file") and output["model_file"].url
-            color_video = output.get("color_video") and output["color_video"].url
-            gaussian_ply = output.get("gaussian_ply") and output["gaussian_ply"].url
-
-            if not model_file:
-                return Response({"error": "model_file not found in output"}, status=500)
-
-            glb_filename = f"{uuid.uuid4()}.glb"
-            bucket_name = "makergrid-media"
-
-            s3_url = download_and_save_to_media(model_file, glb_filename)
-            print(f'Path to Model: {s3_url}')
-
-
-            asset = Asset.objects.create(
-                user=request.user,
-                prompt=user_prompt,
-                model_file=s3_url,
-                preview_image_url=image_url,
-                style=style,
-                complexity=complexity,
-                optimize_printing=optimize_printing
-            )
-
-            response = Response({
-                "message": "✅ 3D model created.",
-                "asset_id": asset.id,
-                "model_file": model_file,
-                "gaussian_ply": gaussian_ply,
-                "color_video": color_video,
-                "stored_path": s3_url,
-                "preview_image_url": image_url,
-                "created_at": asset.created_at,
-            })
-
-            if (new_token := request.META.get('HTTP_NEW_ACCESS')):
-                response['New-Access-Token'] = new_token
-            print(f"Request processed in {time.time() - start:.2f} seconds")
-            return response
-
-        except Exception as e:
-            print("🔥 Exception in TextTo3DModelView:")
-            print(traceback.format_exc()) 
-            return Response({"error": str(e)}, status=500)
+        # Return the task ID and status to the frontend
+        return Response({
+            "task_id": task.id,
+            "status": "pending"
+        })
 
 class ImageTo3DModelView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
-    print("Image to Model Requested")
 
     def post(self, request):
         start = time.time()
@@ -166,58 +94,57 @@ class ImageTo3DModelView(APIView):
                 return Response({"error": "No image uploaded"}, status=400)
 
             filename = f"temp_{uuid.uuid4()}.png"
-
             image_url = save_uploaded_file_to_media(uploaded_file, filename)
 
-            # task = generate_model_task.delay(image_url, request.user.id)
-            # return Response({"task_id": task.id}, status=202)
-            replicate_input = {
-                "images": [image_url],
-                "texture_size": 2048,
-                "mesh_simplify": 0.9,
-                "generate_model": True,
-                "save_gaussian_ply": True,
-                "ss_sampling_steps": 38,
-            }
+            # Trigger Celery task asynchronously
+            task = generate_model_from_image.apply_async(args=[request.user.id, image_url])
 
-            timeout = httpx.Timeout(300)
-            output = replicate.run(TRELLIS_KEY, input=replicate_input, timeout=timeout)
+            print(f"Task {task.id} started for user {request.user.id}")
 
-            model_file = output.get("model_file") and output["model_file"].url
-            color_video = output.get("color_video") and output["color_video"].url
-            gaussian_ply = output.get("gaussian_ply") and output["gaussian_ply"].url
-
-            if not model_file:
-                raise ValueError("model_file not found in output")
-
-            # Upload model to S3
-            glb_filename = f"{uuid.uuid4()}.glb"
-            s3_url = download_and_save_to_media(model_file, glb_filename)
-
-            # Create Asset
-            asset = Asset.objects.create(
-                user=request.user,
-                model_file=s3_url,
-                preview_image_url=image_url,
-            )
-            print(f'model is generated and stored : {s3_url}')
-            return {
-                "status": "completed",
-                "asset_id": asset.id,
-                "stored_path": s3_url,
-                "model_file": model_file,
-                "color_video": color_video,
-                "gaussian_ply": gaussian_ply,
-                "preview_image_url": image_url,
-                "created_at": str(asset.created_at),
-            }
-
-
+            # Return the task ID for status tracking
+            return Response({
+                "task_id": task.id,
+                "status": "pending"
+            })
+        
         except Exception as e:
-            print("🔥 Exception in TextTo3DModelView:")
+            print("🔥 Exception in ImageTo3DModelView:")
             print(traceback.format_exc())
             return Response({"error": str(e)}, status=500)
 
+
+class CheckTaskStatusView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, task_id):
+        task_result = AsyncResult(task_id)
+
+        if task_result.state == 'PENDING':
+            response_data = {
+                'status': 'pending',
+                'result': 'Task is still being processed.'
+            }
+        elif task_result.state == 'SUCCESS':
+            response_data = {
+                'status': 'completed',
+                'result': task_result.result  # You can customize this based on the task result structure
+            }
+        elif task_result.state == 'FAILURE':
+            response_data = {
+                'status': 'failed',
+                'result': str(task_result.info)  # The error message from the exception if the task failed
+            }
+        else:
+            response_data = {
+                'status': 'unknown',
+                'result': 'Unknown state.'
+            }
+        
+        print(f"Task {task_id} status checked: {response_data['status']}")
+
+        return Response(response_data)
+    
 class AssetListCreateView(generics.ListCreateAPIView):
     serializer_class = AssetSerializer
     authentication_classes = [JWTAuthentication]

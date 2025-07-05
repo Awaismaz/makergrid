@@ -134,14 +134,21 @@ LOGGING = {
 
 # settings.py
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'makergrid_db',  # The name of your database
+#         'USER': 'postgres',  # PostgreSQL username
+#         'PASSWORD': '123',  # The new password you set for 'postgres'
+#         'HOST': 'localhost',  # Use 'localhost' if the database is local
+#         'PORT': '5432',  # Default PostgreSQL port
+#     }
+# }
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'makergrid_db',  # The name of your database
-        'USER': 'postgres',  # PostgreSQL username
-        'PASSWORD': '123',  # The new password you set for 'postgres'
-        'HOST': 'localhost',  # Use 'localhost' if the database is local
-        'PORT': '5432',  # Default PostgreSQL port
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',  # or full path like os.path.join(BASE_DIR, 'db.sqlite3')
     }
 }
 

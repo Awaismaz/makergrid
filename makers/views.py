@@ -9,6 +9,7 @@ from rest_framework import status, generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import Asset
+from accounts.models import CustomUser
 from .serializers import AssetSerializer
 from core.authentication.authentication import JWTAuthentication
 from .pagination import CustomPageNumberPagination
@@ -130,6 +131,10 @@ class TextTo3DModelView(APIView):
         style = request.data.get("style")
         complexity = request.data.get("complexity")
         optimize_printing = request.data.get("optimize_printing")
+
+        tokens = request.user.tokens
+
+        print(f"tokens : {tokens}")
 
         if not user_prompt or not style or not complexity:
             return Response({"error": "Prompt, style, and complexity are required."}, status=400)
@@ -350,6 +355,11 @@ class GetPredictionStatusView(APIView):
 
                         image_filename = f"{uuid.uuid4()}.jpg"
                         image_path = save_image_to_media(image_url,image_filename)
+                        tokens = request.user.tokens
+
+                        print(f"tokens : {tokens}")
+
+                        update_tokens = CustomUser.objects.filter(id=request.user.id).update(tokens=tokens-20)
 
                         asset = Asset.objects.create(
                             user=request.user,
@@ -430,7 +440,8 @@ class GetImagePredictionStatusView(APIView):
                             # Save model and return data
                             model_path = download_and_save_to_media(model_file, f"{uuid.uuid4()}.glb")
                             image_path = save_image_to_media(prediction.get("input", {}).get("images", [])[0], f"{uuid.uuid4()}.jpg")
-
+                            tokens = request.user.tokens
+                            update_tokens = CustomUser.objects.filter(id=request.user.id).update(tokens=tokens-20)
                             # Asset creation and response
                             asset = Asset.objects.create(
                                 user=request.user,

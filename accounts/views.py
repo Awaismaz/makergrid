@@ -113,7 +113,7 @@ class VerifyOTPView(APIView):
             password=signup.password,
             full_name=signup.full_name,
             organization=signup.organization,
-            tokens=200
+            tokens=100
         )
         user.is_email_verified = True
         user.save()
@@ -365,6 +365,9 @@ def create_checkout_session(request):
             customer_email=request.user.email,
             success_url=f'{domain}/account/billing-success/?session_id={{CHECKOUT_SESSION_ID}}',
             cancel_url=f'{domain}/cancel/',
+            metadata={
+                'plan': plan  # Set plan in metadata
+            }
         )
         return Response({'id': session.id})
     except Exception as e:
@@ -445,6 +448,8 @@ def stripe_webhook(request):
                 }
             )
 
+            # update_tokens_based_on_plan(user, plan)
+
             logger.info(f"✅ Subscription updated for {user.email} → {plan}")
             return JsonResponse({'status': 'subscription saved'})
 
@@ -455,31 +460,121 @@ def stripe_webhook(request):
     return JsonResponse({'status': 'ignored'})
 
 
+def update_tokens_based_on_plan(user, plan):
+    """
+    Updates the user's tokens based on the subscription plan.
+    """
+    if plan == 'maker':
+        user.tokens += 500  # Add 250 tokens for the 'maker' plan
+    elif plan == 'artisan':
+        user.tokens = float('inf')  # Unlimited tokens for the 'artisan' plan
+    else:
+        user.tokens = 0  # Default: no tokens if the plan is 'free' or undefined
+
+    user.save()
+    logger.info(f"✅ Tokens updated for {user.email} to {user.tokens} tokens based on plan: {plan}")
+
+
+
 @api_view(['GET'])
 def validate_session(request, session_id):
     try:
         # Fetch the session from Stripe
         session = stripe.checkout.Session.retrieve(session_id)
+        logger.info(f"Stripe session retrieved: {session.id}")  # Log session ID for better traceability
+
         customer_email = session.get('customer_email')
-
         if not customer_email:
+            logger.error("Customer email not found in session.")
             return Response({'error': 'Customer email not found in session'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Customer email: {customer_email}")
 
-        # Find user and return minimal info to trigger frontend refresh
+        # Find user by email
         try:
             user = CustomUser.objects.get(email=customer_email)
+            logger.info(f"Found user: {user.email}")
         except CustomUser.DoesNotExist:
+            logger.error(f"User with email {customer_email} not found.")
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        logger.info(f"✅ Stripe session validated for user: {user.email}")
+        # Retrieve subscription plan metadata from Stripe session
+        subscription_plan = session.get('metadata', {}).get('plan')
+        if not subscription_plan:
+            logger.error("Subscription plan not found in session metadata.")
+            return Response({'error': 'Subscription plan not found in session metadata'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Subscription plan: {subscription_plan}")
+
+        # Update user's tokens based on the subscription plan
+        if subscription_plan == 'maker':
+            user.tokens = 500  # Add 500 tokens for 'maker' plan
+            logger.info(f"Updated tokens for 'maker' plan: {user.tokens}")
+        elif subscription_plan == 'artisan':
+            user.tokens = 9999999  # Represent 'unlimited' tokens for 'artisan' plan
+            logger.info(f"Updated tokens for 'artisan' plan: {user.tokens}")
+        else:
+            logger.error(f"Unknown subscription plan: {subscription_plan}")
+            return Response({'error': 'Unknown subscription plan'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update subscription details
+        subscription, created = Subscription.objects.update_or_create(
+            user=user,  # Ensure we update the existing subscription
+            defaults={
+                'plan': subscription_plan,
+                'active': True,
+                'stripe_customer_id': session.get('customer'),
+                'stripe_subscription_id': session.get('subscription'),
+                'subscription_start': timezone.now(),
+                'subscription_end': timezone.now() + timezone.timedelta(days=30),  # Adjust as needed
+            }
+        )
+        logger.info(f"Subscription for {user.email} updated (Plan: {subscription_plan}, Active: {subscription.active})")
+
+        # Save user with updated tokens
+        user.save()
+        logger.info(f"User {user.email} tokens updated successfully to {user.tokens}")
+
+        # Return success response
         return Response({'status': 'success'}, status=status.HTTP_200_OK)
 
     except stripe.error.InvalidRequestError as e:
-        logger.error(f"❌ Stripe error: {e}")
+        logger.error(f"Stripe error: {e}")
         return Response({'error': 'Invalid session ID'}, status=status.HTTP_400_BAD_REQUEST)
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe API error: {e}")
+        return Response({'error': 'Stripe API error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     except Exception as e:
-        logger.exception(f"❌ Unexpected error: {e}")
+        logger.exception(f"Unexpected error: {e}")
         return Response({'error': 'Server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# @api_view(['GET'])
+# def validate_session(request, session_id):
+#     try:
+#         # Fetch the session from Stripe
+#         session = stripe.checkout.Session.retrieve(session_id)
+#         customer_email = session.get('customer_email')
+
+#         if not customer_email:
+#             return Response({'error': 'Customer email not found in session'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Find user and return minimal info to trigger frontend refresh
+#         try:
+#             user = CustomUser.objects.get(email=customer_email)
+#         except CustomUser.DoesNotExist:
+#             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+#         logger.info(f"✅ Stripe session validated for user: {user.email}")
+#         return Response({'status': 'success'}, status=status.HTTP_200_OK)
+
+#     except stripe.error.InvalidRequestError as e:
+#         logger.error(f"❌ Stripe error: {e}")
+#         return Response({'error': 'Invalid session ID'}, status=status.HTTP_400_BAD_REQUEST)
+#     except Exception as e:
+#         logger.exception(f"❌ Unexpected error: {e}")
+#         return Response({'error': 'Server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # class BuyModelCheckoutSession(View):

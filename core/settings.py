@@ -238,12 +238,21 @@ CHANNEL_LAYERS = {
     }
 }
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_HOST = "smtp.hostinger.com"
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Hostinger's SMTP server
+EMAIL_PORT = 465  # Use 465 for SSL or 587 for TLS
+EMAIL_USE_SSL = True  # If you are using SSL
+EMAIL_USE_TLS = False  # Set to True if using port 587 with STARTTLS
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Replace with your Hostinger email
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Replace with your email password
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # settings.py

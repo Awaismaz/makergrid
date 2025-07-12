@@ -3,7 +3,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from .models import Subscription
 from django.utils import timezone
-
+from .models import CustomUser, PendingSignup, Subscription
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -52,9 +52,15 @@ class LoginSerializer(serializers.Serializer):
         refresh['email'] = user.email
 
         # Access related subscription safely
-        subscription_type = None
-        if hasattr(user, 'subscription'):
-            subscription_type = user.subscription.plan
+        subscription = Subscription.objects.filter(user=user, active=True).first()
+
+        if subscription:
+            # The user has an active subscription, process the subscription details
+            current_subscription_plan = subscription.plan
+            print(f"Active subscription plan: {current_subscription_plan}")
+        else:
+            # Handle case where the user does not have an active subscription
+            print("No active subscription found.")
 
         return {
             'refresh': str(refresh),
@@ -64,7 +70,7 @@ class LoginSerializer(serializers.Serializer):
                 'username': user.username,
                 'email': user.email,
                 'tokens': getattr(user, 'tokens', None),
-                'subscription_type': subscription_type,
+                'subscription_type': current_subscription_plan if subscription else 'none',
             }
         }
 

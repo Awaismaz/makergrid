@@ -309,7 +309,7 @@ class CreditTokensView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"credits": request.user.tokens})
+        return Response({"credits": request.user.tokens,"subscription_type": request.user.subscription.plan if hasattr(request.user, 'subscription') else 'free'})
 
 
 @api_view(['GET'])
@@ -508,10 +508,10 @@ def validate_session(request, session_id):
 
         # Update user's tokens based on the subscription plan
         if subscription_plan == 'maker':
-            user.tokens = 500  # Add 500 tokens for 'maker' plan
+            user.tokens = 1000  # Add 500 tokens for 'maker' plan
             logger.info(f"Updated tokens for 'maker' plan: {user.tokens}")
         elif subscription_plan == 'artisan':
-            user.tokens = 9999999  # Represent 'unlimited' tokens for 'artisan' plan
+            user.tokens = 4000  # Represent 'unlimited' tokens for 'artisan' plan
             logger.info(f"Updated tokens for 'artisan' plan: {user.tokens}")
         else:
             logger.error(f"Unknown subscription plan: {subscription_plan}")

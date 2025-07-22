@@ -26,7 +26,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-FRONTEND_DOMAIN = os.getenv('FRONTEND_DOMAIN') or "http://localhost:5173" or "https://www.makergrid.ai" or "https://makergrid-frontend.vercel.app/"
+# FRONTEND_DOMAIN = os.getenv('FRONTEND_DOMAIN') or "http://localhost:5173" or "https://www.makergrid.ai" or "https://makergrid-frontend.vercel.app/"
+FRONTEND_DOMAIN = "https://www.makergrid.ai"
+# FRONTEND_DOMAIN="http://localhost:5173"
 NGROK_DOMAIN = os.getenv("NGROK_DOMAIN") or "03b6-203-175-73-87.ngrok-free.app"
 # ALLOWED_HOSTS = [] 
 # ALLOWED_HOSTS = ["localhost", "127.0.0.1",NGROK_DOMAIN,"http://makergrids.eba-muuyvbmf.eu-north-1.elasticbeanstalk.com/"]
@@ -253,14 +255,28 @@ CHANNEL_LAYERS = {
 # EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 # DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.hostinger.com'  # Hostinger's SMTP server
+# EMAIL_PORT = 465  # Port for TLS
+# EMAIL_USE_TLS = True
+# EMAIL_USE_SSL = True  # If you are using SSL
+# STARTTLS = True  # Set to True if using STARTTLS
+# EMAIL_USE_TLS = False  # Set to True if using port 587 with STARTTLS
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Replace with your Hostinger email
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Replace with your email password
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # Hostinger's SMTP server
-EMAIL_PORT = 465  # Use 465 for SSL or 587 for TLS
-EMAIL_USE_SSL = True  # If you are using SSL
-EMAIL_USE_TLS = False  # Set to True if using port 587 with STARTTLS
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Replace with your Hostinger email
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Replace with your email password
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+EMAIL_HOST = 'smtp.hostinger.com'  # Hostinger's SMTP server
+EMAIL_PORT = 465  # Port for SSL
+EMAIL_USE_SSL = True  # Use SSL for secure connection (instead of TLS)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Your full Hostinger email address
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Your Hostinger email password
+# DEFAULT_FROM_EMAIL =  os.getenv("EMAIL_FROM_USER")  # This will be the email address used in the 'From' field
+DEFAULT_FROM_EMAIL =  EMAIL_HOST_USER  # This will be the email address used in the 'From' field
+
 
 # settings.py
 

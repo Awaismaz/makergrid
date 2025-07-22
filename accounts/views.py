@@ -5,7 +5,7 @@ import json
 import threading
 from datetime import timedelta
 otp_lock = threading.Lock()
-
+import smtplib
 from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework import generics, status
@@ -45,10 +45,12 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 temp_user_store = {}
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
 logger = logging.getLogger(__name__)
 
 def generate_otp():
     return ''.join(random.choices(string.digits, k=6))
+
 
 
 class SignupView(generics.GenericAPIView):
@@ -57,35 +59,109 @@ class SignupView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Start by logging the request for debugging
+        logger.info(f"Signup request received for email: {request.data.get('email')}")
+
+        # Deserialize the request data using the serializer
         serializer = self.get_serializer(data=request.data)
+        
+        # Validate the serializer
         if serializer.is_valid():
             email = serializer.validated_data['email']
+
+            # Check if the email already exists in the PendingSignup
             if PendingSignup.objects.filter(email=email).exists():
+                logger.warning(f"OTP already sent to {email}")
                 return Response({"detail": "OTP already sent. Please verify."}, status=400)
 
-            otp = generate_otp()
-            expires_at = timezone.now() + timedelta(hours=1)
+            try:
+                # Generate OTP and set expiration time
+                otp = generate_otp()
+                expires_at = timezone.now() + timedelta(hours=1)
 
-            PendingSignup.objects.create(
-                email=email,
-                username=serializer.validated_data["username"],
-                full_name=serializer.validated_data.get("full_name", ""),
-                organization=serializer.validated_data.get("organization", ""),
-                password=serializer.validated_data["password"],
-                otp=otp,
-                expires_at=expires_at
-            )
+                # Create the PendingSignup object
+                PendingSignup.objects.create(
+                    email=email,
+                    username=serializer.validated_data["username"],
+                    full_name=serializer.validated_data.get("full_name", ""),
+                    organization=serializer.validated_data.get("organization", ""),
+                    password=serializer.validated_data["password"],
+                    otp=otp,
+                    expires_at=expires_at
+                )
 
-            send_mail(
-                subject="Your OTP Code",
-                message=f"Your OTP is {otp}. It will expire in 1 hour.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-            )
+                print(f"Generated OTP: {otp} for email: {email}")
 
-            return Response({"success": True, "detail": "OTP sent to your email."}, status=200)
+                # Send the OTP to the user's email
+                # send_mail(
+                #     subject="Your OTP Code",
+                #     message=f"Your OTP is {otp}. It will expire in 1 hour.",
+                #     from_email=settings.DEFAULT_FROM_EMAIL,
+                #     recipient_list=[email],
+                #     # fail_silently=False,
+                # )
 
+                sender_email = settings.DEFAULT_FROM_EMAIL # Hostinger webmail email
+                host_email = settings.EMAIL_HOST_USER  # Hostinger email
+                password = settings.EMAIL_HOST_PASSWORD  # App password for your Gmail account (but it should be used for Gmail SMTP)
+                receiver_email = email
+                message = f"Your OTP is {otp}. It will expire in 1 hour."
+
+                try:
+                    # Connect to Hostinger's SMTP server with SSL (port 465)
+                    with smtplib.SMTP_SSL("smtp.hostinger.com", 465) as server:
+                        server.login(host_email, password)  # Log in with Hostinger email credentials
+                        server.sendmail(sender_email, receiver_email, message)
+                    print("Test email sent successfully!")
+                except Exception as e:
+                    print(f"Error: {e}")
+
+                logger.info(f"OTP sent to {email}")
+                return Response({"success": True, "detail": "OTP sent to your email."}, status=200)
+
+            except Exception as e:
+                logger.error(f"Error occurred while processing signup for {email}: {str(e)}")
+                return Response({"detail": "An error occurred while processing your request. Please try again later."}, status=500)
+
+        # If serializer is invalid, return errors
+        logger.error(f"Invalid data: {serializer.errors}")
         return Response(serializer.errors, status=400)
+# class SignupView(generics.GenericAPIView):
+#     serializer_class = SignupSerializer
+#     parser_classes = [JSONParser, FormParser, MultiPartParser]
+#     permission_classes = [AllowAny]
+
+#     def post(self, request):
+#         serializer = self.get_serializer(data=request.data)
+#         if serializer.is_valid():
+#             email = serializer.validated_data['email']
+#             if PendingSignup.objects.filter(email=email).exists():
+#                 return Response({"detail": "OTP already sent. Please verify."}, status=400)
+
+#             otp = generate_otp()
+#             expires_at = timezone.now() + timedelta(hours=1)
+
+#             PendingSignup.objects.create(
+#                 email=email,
+#                 username=serializer.validated_data["username"],
+#                 full_name=serializer.validated_data.get("full_name", ""),
+#                 organization=serializer.validated_data.get("organization", ""),
+#                 password=serializer.validated_data["password"],
+#                 otp=otp,
+#                 expires_at=expires_at
+#             )
+
+#             send_mail(
+#                 subject="Your OTP Code",
+#                 message=f"Your OTP is {otp}. It will expire in 1 hour.",
+#                 from_email=settings.DEFAULT_FROM_EMAIL,
+#                 recipient_list=[email],
+#                 fail_silently=False,
+#             )
+
+#             return Response({"success": True, "detail": "OTP sent to your email."}, status=200)
+
+#         return Response(serializer.errors, status=400)
 
 
 class VerifyOTPView(APIView):
@@ -340,20 +416,42 @@ class LogoutView(APIView):
     
 
 
-# views.py (Django)
+
+
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated])
 def create_checkout_session(request):
     domain = settings.FRONTEND_DOMAIN
     plan = request.data.get('plan')
+    print(f"Received plan: {plan}")
 
+    # Test prices
+    # price_ids = {
+    #     'maker-annually': 'price_1RnSvvE8fUU6TnbUt1eg0TCQ',
+    #     'artisan-annually': 'price_1RnSwME8fUU6TnbUHExTpg3J',
+    #     'maker-monthly': 'price_1RnSumE8fUU6TnbUjcboZ6nM',
+    #     'artisan-monthly': 'price_1RnSvRE8fUU6TnbUNQckEbBO',
+    # }
+
+
+    # Live prices
     price_ids = {
-        'maker': 'price_1RNJZiP2zGsc8dEjrAohl7Ab',
-        'artisan': 'price_1RNJafP2zGsc8dEj5vY1pAHy',
+        'maker-annually': 'price_1RnSnvCZA4DdscMXvP9WByuM',
+        'artisan-annually': 'price_1RnSpFCZA4DdscMXerr4Xpqw',
+        'maker-monthly': 'price_1RnSmGCZA4DdscMX8wGzeNys',
+        'artisan-monthly': 'price_1RnSmyCZA4DdscMXbDkoz88E',
     }
 
+    print(f"Available price IDs: {price_ids}")
     price_id = price_ids.get(plan)
+    print(f"Resolved price_id: {price_id}")
+
+    
+    if plan == 'maker-annually' or plan == 'maker-monthly':
+        metaPlan = "maker"     
+    elif plan == 'artisan-annually' or plan == 'artisan-monthly':
+        metaPlan = "artisan"
     if not price_id:
         return Response({'error': 'Invalid plan'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -364,14 +462,19 @@ def create_checkout_session(request):
             line_items=[{'price': price_id, 'quantity': 1}],
             customer_email=request.user.email,
             success_url=f'{domain}/account/billing-success/?session_id={{CHECKOUT_SESSION_ID}}',
-            cancel_url=f'{domain}/cancel/',
-            metadata={
-                'plan': plan  # Set plan in metadata
-            }
+            cancel_url=f'{domain}/account/billing-cancel',
+            metadata={'plan': metaPlan}
         )
+        print(f"Stripe session response: {session.id}")
         return Response({'id': session.id})
+    except stripe.error.StripeError as e:
+        print(f"Stripe error: {e}")
+        return Response({'error': f"Stripe error: {e.user_message}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        print(f"General error: {e}")
+        return Response({'error': f"General error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 
@@ -549,98 +652,4 @@ def validate_session(request, session_id):
         return Response({'error': 'Server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-# @api_view(['GET'])
-# def validate_session(request, session_id):
-#     try:
-#         # Fetch the session from Stripe
-#         session = stripe.checkout.Session.retrieve(session_id)
-#         customer_email = session.get('customer_email')
-
-#         if not customer_email:
-#             return Response({'error': 'Customer email not found in session'}, status=status.HTTP_400_BAD_REQUEST)
-
-#         # Find user and return minimal info to trigger frontend refresh
-#         try:
-#             user = CustomUser.objects.get(email=customer_email)
-#         except CustomUser.DoesNotExist:
-#             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-
-#         logger.info(f"✅ Stripe session validated for user: {user.email}")
-#         return Response({'status': 'success'}, status=status.HTTP_200_OK)
-
-#     except stripe.error.InvalidRequestError as e:
-#         logger.error(f"❌ Stripe error: {e}")
-#         return Response({'error': 'Invalid session ID'}, status=status.HTTP_400_BAD_REQUEST)
-#     except Exception as e:
-#         logger.exception(f"❌ Unexpected error: {e}")
-#         return Response({'error': 'Server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# class BuyModelCheckoutSession(View):
-#     def post(self, request, model_id, *args, **kwargs):
-#         # Replace this with your actual 3D model lookup logic
-#         model = get_object_or_404(YourModel, id=model_id)
-
-#         domain = "https://yourdomain.com"
-#         session = stripe.checkout.Session.create(
-#             customer_email=request.user.email,
-#             payment_method_types=['card'],
-#             line_items=[{
-#                 'price_data': {
-#                     'currency': 'usd',
-#                     'product_data': {'name': model.name},
-#                     'unit_amount': int(model.price * 100),
-#                 },
-#                 'quantity': 1,
-#             }],
-#             mode='payment',
-#             success_url=domain + '/purchase-success/',
-#             cancel_url=domain + '/cancel/',
-#         )
-
-#         Purchase.objects.create(
-#             user=request.user,
-#             model_name=model.name,
-#             stripe_session_id=session.id
-#         )
-
-#         return JsonResponse({'id': session.id})
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class StripeWebhookView(View):
-#     def post(self, request, *args, **kwargs):
-#         payload = request.body
-#         sig_header = request.META['HTTP_STRIPE_SIGNATURE']
-#         endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
-#         try:
-#             event = stripe.Webhook.construct_event(
-#                 payload, sig_header, endpoint_secret
-#             )
-#         except ValueError:
-#             return HttpResponse(status=400)
-#         except stripe.error.SignatureVerificationError:
-#             return HttpResponse(status=400)
-
-#         # Handle subscription created
-#         if event['type'] == 'checkout.session.completed':
-#             session = event['data']['object']
-#             customer_email = session.get('customer_email')
-#             customer = stripe.Customer.retrieve(session['customer'])
-#             user = User.objects.filter(email=customer_email).first()
-
-#             if session['mode'] == 'subscription':
-#                 Subscription.objects.update_or_create(
-#                     user=user,
-#                     defaults={
-#                         'stripe_customer_id': customer.id,
-#                         'stripe_subscription_id': session['subscription'],
-#                         'active': True,
-#                     }
-#                 )
-#             elif session['mode'] == 'payment':
-#                 Purchase.objects.filter(stripe_session_id=session.id).update(paid=True)
-
-#         return HttpResponse(status=200)
 

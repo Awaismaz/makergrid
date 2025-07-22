@@ -93,28 +93,28 @@ class SignupView(generics.GenericAPIView):
                 print(f"Generated OTP: {otp} for email: {email}")
 
                 # Send the OTP to the user's email
-                # send_mail(
-                #     subject="Your OTP Code",
-                #     message=f"Your OTP is {otp}. It will expire in 1 hour.",
-                #     from_email=settings.DEFAULT_FROM_EMAIL,
-                #     recipient_list=[email],
-                #     # fail_silently=False,
-                # )
+                send_mail(
+                    subject="Your OTP Code for Makergrid Account Regsitration",
+                    message=f"Your OTP is {otp}. It will expire in 1 hour.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
 
-                sender_email = settings.DEFAULT_FROM_EMAIL # Hostinger webmail email
-                host_email = settings.EMAIL_HOST_USER  # Hostinger email
-                password = settings.EMAIL_HOST_PASSWORD  # App password for your Gmail account (but it should be used for Gmail SMTP)
-                receiver_email = email
-                message = f"Your OTP is {otp}. It will expire in 1 hour."
+                # sender_email = settings.DEFAULT_FROM_EMAIL # Hostinger webmail email
+                # host_email = settings.EMAIL_HOST_USER  # Hostinger email
+                # password = settings.EMAIL_HOST_PASSWORD  # App password for your Gmail account (but it should be used for Gmail SMTP)
+                # receiver_email = email
+                # message = f"Your OTP is {otp}. It will expire in 1 hour."
 
-                try:
-                    # Connect to Hostinger's SMTP server with SSL (port 465)
-                    with smtplib.SMTP_SSL("smtp.hostinger.com", 465) as server:
-                        server.login(host_email, password)  # Log in with Hostinger email credentials
-                        server.sendmail(sender_email, receiver_email, message)
-                    print("Test email sent successfully!")
-                except Exception as e:
-                    print(f"Error: {e}")
+                # try:
+                #     # Connect to Hostinger's SMTP server with SSL (port 465)
+                #     with smtplib.SMTP_SSL("smtp.hostinger.com", 465) as server:
+                #         server.login(host_email, password)  # Log in with Hostinger email credentials
+                #         server.sendmail(sender_email, receiver_email, message)
+                #     print("Test email sent successfully!")
+                # except Exception as e:
+                #     print(f"Error: {e}")
 
                 logger.info(f"OTP sent to {email}")
                 return Response({"success": True, "detail": "OTP sent to your email."}, status=200)

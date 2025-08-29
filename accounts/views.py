@@ -29,7 +29,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.conf import settings
-from .models import Purchase, Subscription,CustomUser,PendingSignup,TokensPrice
+from .models import Purchase, Subscription,CustomUser,PendingSignup,TokensPrice,OTP
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -49,7 +49,7 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
 
 def generate_otp():
-    return ''.join(random.choices(string.digits, k=6))
+    return str(random.randint(100000, 999999))
 
 
 
@@ -163,6 +163,38 @@ class SignupView(generics.GenericAPIView):
 
 #         return Response(serializer.errors, status=400)
 
+
+class VerifyPasswordResetOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp_input = request.data.get("otp")
+
+        if not email or not otp_input:
+            return Response({"detail": "Email and OTP are required."}, status=400)
+
+        try:
+            # Retrieve the OTP object associated with the user
+            user = CustomUser.objects.get(email=email)
+            otp_record = OTP.objects.get(user=user)
+        except CustomUser.DoesNotExist:
+            return Response({"detail": "User not found."}, status=404)
+        except OTP.DoesNotExist:
+            return Response({"detail": "OTP not found for this user."}, status=404)
+
+        # Check if the OTP is expired
+        if otp_record.is_expired():
+            otp_record.delete()  # Optionally delete expired OTPs
+            return Response({"detail": "OTP has expired. Please request a new one."}, status=400)
+
+        # Verify if the OTP matches
+        if otp_record.otp != otp_input:
+            return Response({"detail": "Invalid OTP."}, status=400)
+
+        # OTP is valid, allow password reset (you can now proceed to the next step)
+        return Response({"success": "OTP is valid. You can now reset your password."}, status=200)
+
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -227,34 +259,91 @@ class ResendOTPView(APIView):
 
         return Response({"detail": "OTP resent to your email."})
 
-class ForgotPasswordView(APIView):
+
+def validate_otp(user, otp_input):
+    try:
+        otp = OTP.objects.get(user=user)
+        if otp.is_expired():
+            otp.delete()  # Delete expired OTP
+            return "OTP has expired, please request a new one"
+        if otp.otp != otp_input:
+            return "Invalid OTP"
+        return "OTP valid"
+    except OTP.DoesNotExist:
+        return "OTP does not exist"
+# class ForgotPassword(APIView):
+#     permission_classes = [AllowAny]
+
+#     def post(self, request):
+#         email = request.data.get("email")
+
+#         if email :
+#             try:
+#                 user = CustomUser.objects.get(email=email)
+#             except CustomUser.DoesNotExist:
+#                 return Response({"detail": f"User not found for email : {email}","status":"404"}, status=200)
+
+#         # Generate OTP
+#         otp = generate_otp()
+
+#         # Save OTP in the OTP model
+#         otp_record, created = OTP.objects.update_or_create(
+#             user=user,
+#             defaults={'otp': otp}
+#         )
+
+#         # Expiration time for the OTP
+#         otp_record.created_at = time.time()
+#         otp_record.save()
+
+#         # Send OTP to the user via email
+#         send_mail(
+#             subject="Password Reset OTP",
+#             message=f"Your OTP is {otp}. It will expire in 1 hour.",
+#             from_email=settings.DEFAULT_FROM_EMAIL,
+#             recipient_list=[email],
+#             fail_silently=False,
+#         )
+
+#         return Response({"success": "Password reset OTP sent."}, status=200)
+
+
+class ForgotPassword(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email")
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            return Response({"detail": "User not found."}, status=404)
 
+        if email:
+            try:
+                user = CustomUser.objects.get(email=email)
+            except CustomUser.DoesNotExist:
+                return Response({"detail": f"User not found for email : {email}", "status": "404"}, status=200)
+
+        # Generate OTP
         otp = generate_otp()
-        now = time.time()
-        temp_user_store[email] = {
-            "otp": otp,
-            "expires_at": now + 300,
-            "last_sent_at": now,
-            "type": "reset"
-        }
 
+        # Save OTP in the OTP model
+        otp_record, created = OTP.objects.update_or_create(
+            user=user,
+            defaults={'otp': otp}
+        )
+
+        # Expiration time for the OTP (use timezone.now() instead of time.time())
+        otp_record.created_at = timezone.now()  # Use timezone.now() to get a datetime object
+        otp_record.save()
+
+        # Send OTP to the user via email
         send_mail(
             subject="Password Reset OTP",
-            message=f"Your OTP is {otp}. It will expire in 5 minutes.",
+            message=f"Your OTP is {otp}. It will expire in 1 hour.",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[email],
             fail_silently=False,
         )
 
-        return Response({"detail": "Password reset OTP sent."})
+        return Response({"success": "Password reset OTP sent."}, status=200)
+
 
 class VerifyResetOTPView(APIView):
     permission_classes = [AllowAny]
@@ -280,17 +369,12 @@ class ResetPasswordView(APIView):
     def post(self, request):
         email = request.data.get("email")
         new_password = request.data.get("password")
-        entry = temp_user_store.get(email)
-
-        if not entry or entry.get("type") != "reset":
-            return Response({"detail": "No verified reset request."}, status=400)
-
         try:
             user = CustomUser.objects.get(email=email)
             user.set_password(new_password)
             user.save()
             del temp_user_store[email]
-            return Response({"detail": "Password updated successfully."})
+            return Response({"detail": "Password updated successfully.","success":True})
         except CustomUser.DoesNotExist:
             return Response({"detail": "User not found."}, status=404)
 
@@ -395,7 +479,15 @@ class CreditTokensView(APIView):
 @permission_classes([IsAuthenticated])
 def get_required_data_view(request):
     user = request.user
-    token_price= TokensPrice.objects.all().order_by('quantity_of_tokens').first()
+    
+    # Get the first token price (example)
+    token_price = TokensPrice.objects.all().order_by('quantity_of_tokens').first()
+    
+    # Get subscription end date
+    try:
+        sub_end_date = user.subscription.subscription_end
+    except Subscription.DoesNotExist:
+        sub_end_date = None  # User has no subscription
 
     return Response({
         'id': user.id,
@@ -404,8 +496,8 @@ def get_required_data_view(request):
         'tokens': user.tokens,
         'token_quantity': token_price.quantity_of_tokens if token_price else None,
         "token_price": token_price.price_in_cents if token_price else None,
+        "sub_end_date": sub_end_date
     })
-
 
 
 
@@ -433,7 +525,7 @@ def current_user_view(request):
         'subscription_end': subscription.subscription_end if subscription else None,
         'is_email_verified': user.is_email_verified,
         "payement_method": subscription.payement_method if subscription else None,
-        'sub_canceled': subscription.subscription_end if (subscription and canceled_sub) else None,
+        'sub_canceled': subscription.cancel_at_period_end if subscription else None
     })
 
 
@@ -1028,6 +1120,7 @@ def cancel_subscription(request):
             defaults={
                 'active': False,
                 'status': 'canceled',
+                'plan':"free",
                 'subscription_end': sub.subscription_end,  # remains until period end
                 'cancel_at_period_end': True,
             })

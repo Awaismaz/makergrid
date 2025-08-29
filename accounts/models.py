@@ -36,6 +36,7 @@ class CustomUser(AbstractUser):
     organization = models.CharField(max_length=100, blank=True)
     profile_picture = models.URLField(blank=True, null=True)
 
+
     REQUIRED_FIELDS = ['email']
 
     def __str__(self):
@@ -74,6 +75,16 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.plan}"
+    
+
+class OTP(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='otp')
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)  # Automatically set the creation time
+
+    def is_expired(self):
+        # Check if the OTP is older than 1 hour
+        return timezone.now() > self.created_at + timezone.timedelta(hours=1)
 
 class Purchase(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

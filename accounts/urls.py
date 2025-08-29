@@ -1,11 +1,13 @@
 from django.urls import path
-from .views import current_user_view,get_required_data_view,validate_session_for_token,create_checkout_session_for_token,validate_session,stripe_webhook,BlenderLoginView,SignupView,RefreshView,LoginView,VerifyOTPView,ForgotPasswordView,ResendResetOTPView, VerifyResetOTPView, ResetPasswordView,CreditTokensView,LogoutView,create_checkout_session
+from .views import current_user_view,cancel_subscription,VerifyPasswordResetOTPView,get_required_data_view,validate_session_for_token,create_checkout_session_for_token,validate_session,stripe_webhook,BlenderLoginView,SignupView,RefreshView,LoginView,VerifyOTPView,ForgotPassword,ResendResetOTPView, VerifyResetOTPView, ResetPasswordView,CreditTokensView,LogoutView,create_checkout_session
 
 urlpatterns = [
     path('signup/', SignupView.as_view(), name='signup'),
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
-    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    # path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
+    path('recover-password/',ForgotPassword.as_view(),name="forgot-password"),
     path('verify-reset-otp/', VerifyResetOTPView.as_view(), name='verify-reset-otp'),
+    path('verify-password-reset-otp/', VerifyPasswordResetOTPView.as_view(), name='verify-password-reset-otp'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('resend-reset-otp/', ResendResetOTPView.as_view(), name='resend-reset-otp'),
     path('login/', LoginView.as_view(), name='login'),
@@ -20,6 +22,7 @@ urlpatterns = [
     path('stripe/create-checkout-session/', create_checkout_session),
     path('stripe/webhook/', stripe_webhook, name='stripe-webhook'),
     path("stripe/validate-session/<str:session_id>/",validate_session, name="validate-session"),
+    path('billing/cancel-subscription/',cancel_subscription,name='cancel-subscription')
 
 
     # path('create-model-checkout/<int:model_id>/', BuyModelCheckoutSession.as_view(), name='buy-model'),

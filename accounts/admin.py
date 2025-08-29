@@ -82,4 +82,5 @@ class CustomUserAdmin(UserAdmin):
 # Register Coupon model with admin
 admin.site.register(Coupon, CouponAdmin)
 admin.site.register(TokensPrice)
-admin.site.register(Subscription,PendingSignup)
+admin.site.register(Subscription)
+admin.site.register(PendingSignup)

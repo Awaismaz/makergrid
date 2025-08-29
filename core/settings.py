@@ -272,8 +272,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  # Gmail's SMTP server
 EMAIL_PORT = 587  # Port for TLS
 EMAIL_USE_TLS = True  # Use TLS for secure connection
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Your Gmail address
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Your Gmail app password
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Your Gmail address
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Your Gmail app password
+EMAIL_HOST_USER = "makergridai@gmail.com"  # Your Gmail address
+EMAIL_HOST_PASSWORD = "tjuwzyyvfelasmjk"
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # From address
 
 

@@ -70,9 +70,9 @@ class SignupView(generics.GenericAPIView):
             email = serializer.validated_data['email']
 
             # Check if the email already exists in the PendingSignup
-            if PendingSignup.objects.filter(email=email).exists():
-                logger.warning(f"OTP already sent to {email}")
-                return Response({"detail": "OTP already sent. Please verify."}, status=400)
+            # if PendingSignup.objects.filter(email=email).exists():
+            #     logger.warning(f"OTP already sent to {email}")
+            #     return Response({"detail": "OTP already sent. Please verify."}, status=400)
 
             try:
                 # Generate OTP and set expiration time
@@ -450,6 +450,8 @@ class BlenderLoginView(generics.GenericAPIView):
             return Response(validated_data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 class RefreshView(generics.GenericAPIView):
     authentication_classes = [JWTAuthentication]

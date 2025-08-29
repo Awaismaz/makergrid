@@ -12,8 +12,8 @@ class Asset(models.Model):
     prompt = models.TextField()
     model_file = models.FileField(upload_to="assets/")
     preview_image_url = models.URLField(blank=True, null=True)
-    style = models.TextField(default="realistic")  # or whatever default you prefer
-    complexity = models.TextField(default="medium")  # sensible default
+    style = models.TextField(default="none")  # or whatever default you prefer
+    complexity = models.TextField(default="none")  # sensible default
     optimize_printing = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

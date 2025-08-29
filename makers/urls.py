@@ -1,12 +1,12 @@
 from django.urls import path
-from .views import UserAssetsView,TextTo3DModelView,AssetListCreateView,export_model_from_blender,AssetRetrieveView,ImageTo3DModelView,GetPredictionStatusView,GetImagePredictionStatusView
+from .views import UserAssetsView,TextTo3DModelView,AssetListCreateView,ExportModelFromBlender,AssetRetrieveView,ImageTo3DModelView,GetPredictionStatusView,GetImagePredictionStatusView
 
 urlpatterns = [
     path("text-to-model/", TextTo3DModelView.as_view(), name="text-to-model"),
     path("image-to-model/", ImageTo3DModelView.as_view(), name="image-to-model"),
     path('check-task-status/<task_id>/', GetPredictionStatusView.as_view(), name='check-task-status'),
     path('check-image-task-status/<task_id>/', GetImagePredictionStatusView.as_view(), name='check-task-status'),
-    path("blender/export/model/",export_model_from_blender.as_view(), name="export-model"),
+    path("blender/export/model/",ExportModelFromBlender.as_view(), name="export-model"),
     path("assets/", UserAssetsView.as_view(), name="asset-list-create"),
     path("assets/<int:pk>/", AssetRetrieveView.as_view(), name="asset-retrieve")
 ]

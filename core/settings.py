@@ -272,16 +272,28 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  # Gmail's SMTP server
 EMAIL_PORT = 587  # Port for TLS
 EMAIL_USE_TLS = True  # Use TLS for secure connection
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Your Gmail address
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Your Gmail app password
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # Your Gmail address
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # Your Gmail app password
+EMAIL_HOST_USER = "makergridai@gmail.com"  # Your Gmail address
+EMAIL_HOST_PASSWORD = "tjuwzyyvfelasmjk"
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # From address
 
 
 # settings.py
 
+# STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
+# STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+# STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+
 STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+
+# STRIPE_SECRET_KEY = "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"
+# STRIPE_WEBHOOK_SECRET="whsec_4WV0GD8wJROE3oigh7tl9TOCgX6Mq6NR"
+
 
 # CELERY_BROKER_URL = "redis://clustercfg.makergrid-redis.9fhmuh.eun1.cache.amazonaws.com:6379/0"
 # CELERY_RESULT_BACKEND = CELERY_BROKER_URL

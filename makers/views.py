@@ -78,6 +78,12 @@ def download_and_save_to_media(url, filename):
         return path
     raise Exception("Failed to download file from external source.")
 
+def save_to_media(file, filename):
+    if file :
+        path = default_storage.save(f"models/{filename}", ContentFile(file))
+        return path
+    raise Exception("Failed to save file to media directory.")
+
 def normalize_text(text):
     return text.lower().replace("-", " ").replace("_", " ").strip()
 
@@ -135,6 +141,11 @@ class TextTo3DModelView(APIView):
         tokens = request.user.tokens
 
         print(f"tokens : {tokens}")
+
+        if tokens <= 0 :
+            print("Token or Credits Ended")
+            return Response({"error": "Insufficient credits. Your account doesn’t have enough tokens to complete this request. Add credits to continue."}, status=400)
+
 
         if not user_prompt or not style or not complexity:
             return Response({"error": "Prompt, style, and complexity are required."}, status=400)
@@ -234,11 +245,21 @@ class ImageTo3DModelView(APIView):
     def post(self, request):
         start = time.time()
         print("Job started image to 3D model")
-        try:
-            uploaded_file = request.FILES.get("image")
-            if not uploaded_file:
-                return Response({"error": "No image uploaded"}, status=400)
+        tokens = request.user.tokens
 
+        print(f"tokens : {tokens}")
+
+        uploaded_file = request.FILES.get("image")
+        if not uploaded_file:
+            return Response({"error": "No image uploaded"}, status=400)
+        
+        if tokens <= 0 :
+            print("Token or Credits Ended")
+            return Response({"error": "Insufficient credits. Your account doesn’t have enough tokens to complete this request. Add credits to continue."}, status=400)
+
+        
+        try:
+            # Save the uploaded file to media directory
             filename = f"temp_{uuid.uuid4()}.png"
             image_url = save_uploaded_file_to_media(uploaded_file, filename)
             final_image_url = f"{BASEURL}/media/{image_url}"
@@ -337,6 +358,8 @@ class GetPredictionStatusView(APIView):
                         color_video = output_data.get("color_video")
                         gaussian_ply = output_data.get("gaussian_ply")
 
+                        print(f"COMPLETE OUTPUT : {output_data}")
+
                         print(f"Model file URL: {model_file}")
                         print(f"Color video URL: {color_video}")
 
@@ -360,6 +383,7 @@ class GetPredictionStatusView(APIView):
                         print(f"tokens : {tokens}")
 
                         update_tokens = CustomUser.objects.filter(id=request.user.id).update(tokens=tokens-20)
+                        
 
                         asset = Asset.objects.create(
                             user=request.user,
@@ -370,11 +394,13 @@ class GetPredictionStatusView(APIView):
                             complexity=complexity,
                             optimize_printing=optimize_printing
                         )
+                        new_tokens_count = request.user.tokens
                         print(f"model path: {model_path}")
                         print(f'image path: {image_path}')
                         return Response({
                             "status": "completed",
                             "message": "3D model created.",
+                            "tokens":new_tokens_count,
                             "asset_id": str(asset.id),
                             "model_file":  f"{model_file}",
                             "gaussian_ply": gaussian_ply,
@@ -467,7 +493,8 @@ class GetImagePredictionStatusView(APIView):
 
                         elif status == "failed":
                             # Log the failure and provide an error response
-                            logger.error(f"Task {task_id} failed: {prediction.get('error_message', 'Unknown error')}")
+                            # logger.error(f"Task {task_id} failed: {prediction.get('error_message', 'Unknown error')}")
+                            logger.error(f"Task {task_id} failed: {prediction}")
                             return Response({"error": "Prediction failed."}, status=400)
 
                         # If the task is still starting, continue retrying
@@ -489,7 +516,11 @@ class GetImagePredictionStatusView(APIView):
             logger.error(traceback.format_exc())
             return Response({"error": str(e)}, status=500)
 
+class export_model_from_blender(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
+    
     
 class AssetListCreateView(generics.ListCreateAPIView):
     serializer_class = AssetSerializer

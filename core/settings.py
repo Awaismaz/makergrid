@@ -207,8 +207,8 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = "accounts.CustomUser"
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),  # ⏰ Change this to what you want
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),     # You can customize this too
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),  # ⏰ Change this to what you want
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),     # You can customize this too
 
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,

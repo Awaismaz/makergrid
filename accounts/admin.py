@@ -1,8 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser
+from .models import CustomUser, Coupon,TokensPrice,Subscription
 
+# Admin for Coupon model
+class CouponAdmin(admin.ModelAdmin):
+    list_display = ('code', 'discount_type', 'discount_value', 'active', 'valid_from', 'valid_until', 'created_at')
+    search_fields = ('code',)
+    list_filter = ('active', 'discount_type')
 
+# Admin for CustomUser model
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
@@ -72,3 +78,8 @@ class CustomUserAdmin(UserAdmin):
     def get_subscription_end(self, obj):
         return getattr(obj.subscription, 'subscription_end', None)
     get_subscription_end.short_description = 'End Date'
+
+# Register Coupon model with admin
+admin.site.register(Coupon, CouponAdmin)
+admin.site.register(TokensPrice)
+admin.site.register(Subscription)

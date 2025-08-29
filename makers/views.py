@@ -79,8 +79,10 @@ def download_and_save_to_media(url, filename):
     raise Exception("Failed to download file from external source.")
 
 def save_to_media(file, filename):
-    if file :
-        path = default_storage.save(f"models/{filename}", ContentFile(file))
+    if file:
+        # Get the content of the file as bytes
+        file_content = file.read()  # This will read the file content as bytes
+        path = default_storage.save(f"models/{filename}", ContentFile(file_content))
         return path
     raise Exception("Failed to save file to media directory.")
 
@@ -516,9 +518,40 @@ class GetImagePredictionStatusView(APIView):
             logger.error(traceback.format_exc())
             return Response({"error": str(e)}, status=500)
 
-class export_model_from_blender(APIView):
+class ExportModelFromBlender(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        model_file = request.FILES.get('file')
+
+        if model_file:
+            # Generate a unique filename for the model
+            glb_filename = f"{uuid.uuid4()}.glb"
+
+            # Save the model to the media directory and get the file path
+            model_path = save_to_media(model_file, glb_filename)
+
+            # Create a new asset in the database
+            asset = Asset.objects.create(
+                user=request.user,
+                prompt="EXPORTED FROM BLENDER",
+                model_file=model_path,
+            )
+
+            # Return a success response
+            return Response({
+                "success": True,
+                "message": "Model exported successfully",
+                "model_path": model_path,  # Optionally return the model path
+            })
+
+        return Response({
+            "success": False,
+            "message": "No file provided",
+        }, status=400)
+
+            
 
     
     

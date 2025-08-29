@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Coupon,TokensPrice,Subscription
+from .models import CustomUser, Coupon,TokensPrice,Subscription,PendingSignup
 
 # Admin for Coupon model
 class CouponAdmin(admin.ModelAdmin):
@@ -82,4 +82,4 @@ class CustomUserAdmin(UserAdmin):
 # Register Coupon model with admin
 admin.site.register(Coupon, CouponAdmin)
 admin.site.register(TokensPrice)
-admin.site.register(Subscription)
+admin.site.register(Subscription,PendingSignup)

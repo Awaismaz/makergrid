@@ -3,8 +3,10 @@ import string
 import time
 import json
 import threading
+from datetime import datetime
 from datetime import timedelta
 otp_lock = threading.Lock()
+from django.db.models import F
 import smtplib
 from django.core.mail import send_mail
 from django.conf import settings
@@ -491,15 +493,21 @@ def get_required_data_view(request):
     except Subscription.DoesNotExist:
         sub_end_date = None  # User has no subscription
 
-    return Response({
+    sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+
+    payload = {
         'id': user.id,
         'username': user.username,
         'email': user.email,
         'tokens': user.tokens,
         'token_quantity': token_price.quantity_of_tokens if token_price else None,
         "token_price": token_price.price_in_cents if token_price else None,
-        "sub_end_date": sub_end_date
-    })
+        "sub_end_date": sub_end_date_naive
+    }
+
+    print(f"Payload : {payload}")
+
+    return Response(payload)
 
 
 
@@ -510,13 +518,22 @@ def get_required_data_view(request):
 def current_user_view(request):
     user = request.user
     subscription = getattr(user, 'subscription', None)
-    if subscription and subscription.cancel_at_period_end and subscription.subscription_end < timezone.now():
-        # Subscription has ended
-        # subscription.active = False
-        # subscription.plan = 'free'
-        # subscription.save()
+    
+    # Ensure subscription_end is not None before comparing
+    if subscription and subscription.cancel_at_period_end and subscription.subscription_end:
+        if subscription.subscription_end < timezone.now():
+            # Subscription has ended
+            # subscription.active = False
+            # subscription.plan = 'free'
+            # subscription.save()
+            canceled_sub = True
+    else:
+        canceled_sub = False
 
-        canceled_sub = True
+
+    sub_end_date=subscription.subscription_end
+    sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+
 
     return Response({
         'id': user.id,
@@ -524,11 +541,12 @@ def current_user_view(request):
         'email': user.email,
         'tokens': user.tokens,
         'subscription_type': subscription.plan if subscription else 'free',
-        'subscription_end': subscription.subscription_end if subscription else None,
+        'subscription_end':  sub_end_date_naive if subscription else None,
         'is_email_verified': user.is_email_verified,
         "payement_method": subscription.payement_method if subscription else None,
         'sub_canceled': subscription.cancel_at_period_end if subscription else None
     })
+
 
 
 class LogoutView(APIView):
@@ -773,10 +791,16 @@ def create_checkout_session(request):
     print("Plan selected:", plan)
     coupon_code = request.data.get('coupon_code')  # can be coupon id or human code (promotion code)
 
+    # price_ids = {
+    #     'maker-annually': 'price_1RnSnvCZA4DdscMXvP9WByuM',
+    #     'artisan-annually': 'price_1RnSpFCZA4DdscMXerr4Xpqw',
+    #     'maker-monthly': 'price_1RnSmGCZA4DdscMX8wGzeNys',
+    #     'artisan-monthly': 'price_1RnSmyCZA4DdscMXbDkoz88E',
+    # }
     price_ids = {
         'maker-annually': 'price_1RnSnvCZA4DdscMXvP9WByuM',
         'artisan-annually': 'price_1RnSpFCZA4DdscMXerr4Xpqw',
-        'maker-monthly': 'price_1RnSmGCZA4DdscMX8wGzeNys',
+        'maker-monthly': 'price_1S1XZQE8fUU6TnbUV4hfTUG1',
         'artisan-monthly': 'price_1RnSmyCZA4DdscMXbDkoz88E',
     }
     # price_ids = {
@@ -921,8 +945,13 @@ def create_checkout_session(request):
 #     return JsonResponse({'status': 'ignored'})
 
 
+def get_sub_data (sub_id):
+    subscription = stripe.Subscription.retrieve(sub_id)
+    print (f"DATA : {subscription}")
+
 
 def _sync_subscription(sub_obj, session_obj=None):
+        # print(f"DATA : {sub_obj}")
         customer_id = sub_obj.get('customer')
         stripe_subscription_id = sub_obj.get('id')
         items = (sub_obj.get('items') or {}).get('data', [])
@@ -935,7 +964,6 @@ def _sync_subscription(sub_obj, session_obj=None):
 
         duration_type = meta.get('duration_type')  # 'monthly' / 'annually' (or whatever you set)
         meta_plan = meta.get('plan')  # optional fallback for plan
-
         # Map plan by price id, with fallback to metadata.plan
         plan_id = items[0].get('price', {}).get('id') if items else None
         plan_mapping = {
@@ -946,8 +974,26 @@ def _sync_subscription(sub_obj, session_obj=None):
         }
         plan = plan_mapping.get(plan_id) or meta_plan or 'free'
 
-        current_period_start = sub_obj.get('current_period_start')
-        current_period_end = sub_obj.get('current_period_end')
+        for item in sub_obj['items']['data']:
+            current_period_start = item['current_period_start']
+            current_period_end = item['current_period_end']
+
+            print(f"current_period_start : {current_period_start}")
+            print(f"current_period_end : {current_period_end}")
+            
+            # Use timezone-aware datetime objects
+            current_period_start_date = datetime.fromtimestamp(current_period_start, tz=dt_timezone.utc)
+            current_period_end_date = datetime.fromtimestamp(current_period_end, tz=dt_timezone.utc)
+            
+            print(f"current_period_start_date (timezone-aware): {current_period_start_date}")
+            print(f"current_period_end_date (timezone-aware): {current_period_end_date}")
+
+        
+        # current_period_start = sub_obj.get('current_period_start')
+        # current_period_end = sub_obj.get('current_period_end')
+
+        # current_period_start_date = datetime.utcfromtimestamp(current_period_start_timestamp)
+        # current_period_end_date = datetime.utcfromtimestamp(current_period_end_timestamp)
 
         # Find user by our saved customer_id; fallback to email on the Stripe customer
         subs = Subscription.objects.filter(stripe_customer_id=customer_id)
@@ -974,6 +1020,31 @@ def _sync_subscription(sub_obj, session_obj=None):
             cust = stripe.Customer.retrieve(customer_id)
             pm_id = ((cust or {}).get('invoice_settings') or {}).get('default_payment_method')
 
+        if duration_type == "year":
+            # Add 12 months to the current date
+            end_date = timezone.now() + timedelta(days=365)  # Roughly 1 year (considering leap years)
+
+        elif duration_type == "month":
+            # Add 30 days to the current date
+            end_date = timezone.now() + timedelta(days=30)
+
+        
+        current_tokens = user.tokens
+        print(f'Previous Tokens : {current_tokens}')
+        if meta_plan == "maker" and duration_type == "month" :
+            print("MAKER PLAN IS READY")
+            user.tokens += 1000  # Add 1000 to the current token value
+            user.save()
+        # elif meta_plan is "maker" and duration_type is "year" :
+        #     add_tokens = 4000
+        elif meta_plan == "artisan" and duration_type == "month" :
+            print("artisan PLAN IS READY")
+            user.tokens += 4000  # Add 1000 to the current token value
+            user.save()
+
+        # elif meta_plan is "artisan" and duration_type is "year" :
+        #     add_tokens = 4000     
+
         Subscription.objects.update_or_create(
             user=user,
             defaults={
@@ -982,8 +1053,8 @@ def _sync_subscription(sub_obj, session_obj=None):
                 'stripe_subscription_id': stripe_subscription_id,
                 'status': status_s,
                 'active': active_flag,
-                'subscription_start': start_dt or timezone.now(),
-                'subscription_end': end_dt,
+                'subscription_start': current_period_start_date,
+                'subscription_end': current_period_end_date,
                 'cancel_at_period_end': sub_obj.get('cancel_at_period_end', False),
                 'duration_type': duration_type,            # ✅ now sourced correctly
                 'payment_method': pm_id,                   # ✅ fix typo from 'payement_method'
@@ -1016,6 +1087,10 @@ def stripe_webhook(request):
             sub_id = data.get('subscription')
             if sub_id:
                 sub = stripe.Subscription.retrieve(sub_id)
+                # current_period_start = sub.get('current_period_start')
+                # current_period_end = sub.get('current_period_end')
+                # print(f"current_period_end : {current_period_end}")
+                # print(f"current_period_start : {current_period_start}")
                 _sync_subscription(sub)
             return JsonResponse({'ok': True})
 
@@ -1055,15 +1130,6 @@ def stripe_webhook(request):
         if sub_id:
             sub = stripe.Subscription.retrieve(sub_id)
             _sync_subscription(sub)
-            try:
-                customer_id = sub.get('customer')
-                subscription_row = Subscription.objects.filter(stripe_customer_id=customer_id).first()
-                if subscription_row:
-                    user = subscription_row.user
-                    plan = subscription_row.plan
-                    update_tokens_based_on_plan(user, plan)
-            except Exception:
-                pass
         return JsonResponse({'ok': True})
 
     # -----------------------------
@@ -1138,9 +1204,9 @@ def update_tokens_based_on_plan(user, plan):
     Updates the user's tokens based on the subscription plan.
     """
     if plan == 'maker':
-        user.tokens += 500  # Add 250 tokens for the 'maker' plan
+        user.tokens += 1000  # Add 250 tokens for the 'maker' plan
     elif plan == 'artisan':
-        user.tokens = float('inf')  # Unlimited tokens for the 'artisan' plan
+        user.tokens += 4000  # Unlimited tokens for the 'artisan' plan
     else:
         user.tokens = 0  # Default: no tokens if the plan is 'free' or undefined
 

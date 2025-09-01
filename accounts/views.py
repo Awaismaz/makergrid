@@ -483,6 +483,8 @@ class CreditTokensView(APIView):
 @permission_classes([IsAuthenticated])
 def get_required_data_view(request):
     user = request.user
+    subscription = getattr(user, 'subscription', None)
+
     
     # Get the first token price (example)
     token_price = TokensPrice.objects.all().order_by('quantity_of_tokens').first()
@@ -502,7 +504,7 @@ def get_required_data_view(request):
         'tokens': user.tokens,
         'token_quantity': token_price.quantity_of_tokens if token_price else None,
         "token_price": token_price.price_in_cents if token_price else None,
-        "sub_end_date": sub_end_date_naive
+        "sub_end_date": sub_end_date_naive if subscription else None,
     }
 
     print(f"Payload : {payload}")

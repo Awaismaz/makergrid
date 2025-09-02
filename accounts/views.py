@@ -809,7 +809,7 @@ def create_checkout_session(request):
     price_ids = {
         'maker-annually': 'price_1RnSnvCZA4DdscMXvP9WByuM',
         'artisan-annually': 'price_1RnSpFCZA4DdscMXerr4Xpqw',
-        'maker-monthly': 'price_1S1XZQE8fUU6TnbUV4hfTUG1',
+        'maker-monthly': 'price_1RnSmGCZA4DdscMX8wGzeNys',
         'artisan-monthly': 'price_1RnSmyCZA4DdscMXbDkoz88E',
     }
     # price_ids = {
@@ -975,19 +975,19 @@ def _sync_subscription(sub_obj, session_obj=None):
         meta_plan = meta.get('plan')  # optional fallback for plan
         # Map plan by price id, with fallback to metadata.plan
         plan_id = items[0].get('price', {}).get('id') if items else None
-        # plan_mapping = {
-        #     'price_1RnSnvCZA4DdscMXvP9WByuM': 'maker',   # maker-annually
-        #     'price_1RnSmGCZA4DdscMX8wGzeNys': 'maker',   # maker-monthly
-        #     'price_1RnSpFCZA4DdscMXerr4Xpqw': 'artisan', # artisan-annually
-        #     'price_1RnSmyCZA4DdscMXbDkoz88E': 'artisan', # artisan-monthly
-        # }
-
         plan_mapping = {
             'price_1RnSnvCZA4DdscMXvP9WByuM': 'maker',   # maker-annually
-            'price_1S1XZQE8fUU6TnbUV4hfTUG1': 'maker',   # maker-monthly
+            'price_1RnSmGCZA4DdscMX8wGzeNys': 'maker',   # maker-monthly
             'price_1RnSpFCZA4DdscMXerr4Xpqw': 'artisan', # artisan-annually
             'price_1RnSmyCZA4DdscMXbDkoz88E': 'artisan', # artisan-monthly
         }
+
+        # plan_mapping = {
+        #     'price_1RnSnvCZA4DdscMXvP9WByuM': 'maker',   # maker-annually
+        #     'price_1S1XZQE8fUU6TnbUV4hfTUG1': 'maker',   # maker-monthly
+        #     'price_1RnSpFCZA4DdscMXerr4Xpqw': 'artisan', # artisan-annually
+        #     'price_1RnSmyCZA4DdscMXbDkoz88E': 'artisan', # artisan-monthly
+        # }
         plan = plan_mapping.get(plan_id) or meta_plan or 'free'
 
         for item in sub_obj['items']['data']:

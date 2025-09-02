@@ -476,7 +476,7 @@ class CreditTokensView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"credits": request.user.tokens,"subscription_type": request.user.subscription.plan if hasattr(request.user, 'subscription') else 'free'})
+        return Response({"credits": request.user.tokens})
 
 
 @api_view(['GET'])
@@ -495,7 +495,10 @@ def get_required_data_view(request):
     except Subscription.DoesNotExist:
         sub_end_date = None  # User has no subscription
 
-    sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+    if sub_end_date is not None:
+        sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+    else:
+        sub_end_date_naive = None
 
     payload = {
         'id': user.id,
@@ -533,8 +536,12 @@ def current_user_view(request):
         canceled_sub = False
 
 
-    sub_end_date=subscription.subscription_end
-    sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+
+    if subscription and subscription.subscription_end:
+        sub_end_date = subscription.subscription_end
+        sub_end_date_naive = sub_end_date.replace(tzinfo=None)
+    else:
+        sub_end_date_naive = None
 
 
     return Response({
@@ -968,9 +975,16 @@ def _sync_subscription(sub_obj, session_obj=None):
         meta_plan = meta.get('plan')  # optional fallback for plan
         # Map plan by price id, with fallback to metadata.plan
         plan_id = items[0].get('price', {}).get('id') if items else None
+        # plan_mapping = {
+        #     'price_1RnSnvCZA4DdscMXvP9WByuM': 'maker',   # maker-annually
+        #     'price_1RnSmGCZA4DdscMX8wGzeNys': 'maker',   # maker-monthly
+        #     'price_1RnSpFCZA4DdscMXerr4Xpqw': 'artisan', # artisan-annually
+        #     'price_1RnSmyCZA4DdscMXbDkoz88E': 'artisan', # artisan-monthly
+        # }
+
         plan_mapping = {
             'price_1RnSnvCZA4DdscMXvP9WByuM': 'maker',   # maker-annually
-            'price_1RnSmGCZA4DdscMX8wGzeNys': 'maker',   # maker-monthly
+            'price_1S1XZQE8fUU6TnbUV4hfTUG1': 'maker',   # maker-monthly
             'price_1RnSpFCZA4DdscMXerr4Xpqw': 'artisan', # artisan-annually
             'price_1RnSmyCZA4DdscMXbDkoz88E': 'artisan', # artisan-monthly
         }
@@ -1046,6 +1060,8 @@ def _sync_subscription(sub_obj, session_obj=None):
 
         # elif meta_plan is "artisan" and duration_type is "year" :
         #     add_tokens = 4000     
+
+        print(f"sub_obj.get('cancel_at_period_end) : {sub_obj.get('cancel_at_period_end')}")
 
         Subscription.objects.update_or_create(
             user=user,
@@ -1174,6 +1190,7 @@ def cancel_subscription(request):
     Body: {"at_period_end": true}  # default True
     """
     at_period_end = bool(request.data.get('at_period_end', True))
+    print(f"at_period_end : {request.data.get('at_period_end')}")
 
     sub = Subscription.objects.filter(user=request.user, active=True).first()
     if not sub or not sub.stripe_subscription_id:
@@ -1190,11 +1207,12 @@ def cancel_subscription(request):
             defaults={
                 'active': False,
                 'status': 'canceled',
-                'plan':"free",
+                'plan':"Free",
                 'subscription_end': sub.subscription_end,  # remains until period end
                 'cancel_at_period_end': True,
             })
         else:
+            print(f"PHUK YOU")
             stripe.Subscription.delete(sub.stripe_subscription_id)  # immediate cancel
         return Response({'status': 'cancellation_requested'})
     except stripe.error.StripeError as e:

@@ -1326,6 +1326,36 @@ def validate_session(request, session_id):
         return Response({'error': str(e)}, status=500)
 
 
+# Contact form endpoint
+from rest_framework.parsers import JSONParser
+from rest_framework.decorators import parser_classes
+@api_view(["POST"])
+@parser_classes([JSONParser])
+def contact_support_view(request):
+    name = request.data.get("name")
+    email = request.data.get("email")
+    message = request.data.get("message")
+
+    if not name or not email or not message:
+        return Response({"detail": "Name, email, and message are required."}, status=400)
+
+    subject = f"Contact Form Submission from {name}"
+    body = f"Name: {name}\nEmail: {email}\nMessage:\n{message}"
+    support_email = getattr(settings, "SUPPORT_EMAIL", "support@makergrid.ai")
+
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[support_email],
+            fail_silently=False,
+        )
+        return Response({"success": True, "detail": "Message sent to support."}, status=200)
+    except Exception as e:
+        return Response({"detail": f"Failed to send email: {str(e)}"}, status=500)
+
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

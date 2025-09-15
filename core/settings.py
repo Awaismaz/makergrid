@@ -28,7 +28,7 @@ DEBUG = True
 
 # FRONTEND_DOMAIN = os.getenv('FRONTEND_DOMAIN') or "http://localhost:5173" or "https://www.makergrid.ai" or "https://makergrid-frontend.vercel.app/"
 # FRONTEND_DOMAIN = "https://www.makergrid.ai"
-FRONTEND_DOMAIN="http://localhost:5173"
+FRONTEND_DOMAIN="https://makergrid.ai"
 NGROK_DOMAIN = os.getenv("NGROK_DOMAIN") or "03b6-203-175-73-87.ngrok-free.app"
 # ALLOWED_HOSTS = [] 
 # ALLOWED_HOSTS = ["localhost", "127.0.0.1",NGROK_DOMAIN,"http://makergrids.eba-muuyvbmf.eu-north-1.elasticbeanstalk.com/"]

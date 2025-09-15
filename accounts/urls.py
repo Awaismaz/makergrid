@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import current_user_view,cancel_subscription,VerifyPasswordResetOTPView,get_required_data_view,validate_session_for_token,create_checkout_session_for_token,validate_session,stripe_webhook,BlenderLoginView,SignupView,RefreshView,LoginView,VerifyOTPView,ForgotPassword,ResendResetOTPView, VerifyResetOTPView, ResetPasswordView,CreditTokensView,LogoutView,create_checkout_session
+from .views import current_user_view, cancel_subscription, VerifyPasswordResetOTPView, get_required_data_view, validate_session_for_token, create_checkout_session_for_token, validate_session, stripe_webhook, BlenderLoginView, SignupView, RefreshView, LoginView, VerifyOTPView, ForgotPassword, ResendResetOTPView, VerifyResetOTPView, ResetPasswordView, CreditTokensView, LogoutView, create_checkout_session, contact_support_view
 
 urlpatterns = [
     path('signup/', SignupView.as_view(), name='signup'),
@@ -22,7 +22,9 @@ urlpatterns = [
     path('stripe/create-checkout-session/', create_checkout_session),
     path('stripe/webhook/', stripe_webhook, name='stripe-webhook'),
     path("stripe/validate-session/<str:session_id>/",validate_session, name="validate-session"),
-    path('billing/cancel-subscription/',cancel_subscription,name='cancel-subscription')
+    path('billing/cancel-subscription/',cancel_subscription,name='cancel-subscription'),
+    path('contact_support_view/', contact_support_view, name='contact-support')
+  
 
 
     # path('create-model-checkout/<int:model_id>/', BuyModelCheckoutSession.as_view(), name='buy-model'),
